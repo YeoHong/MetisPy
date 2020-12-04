@@ -5,6 +5,7 @@ import json
 import os.path as osp
 
 import PIL.Image 
+import skimage.io
 
 from MetisPy import __version__
 from MetisPy.utils.logger import logger
@@ -37,12 +38,13 @@ class LabelFile(object):
     def load_image_file(filename):
         try:
             image_pil = PIL.Image.open(filename)
+            
         except IOError:
             logger.error("Failed opening image file: {}".format(filename))
             return
 
         # apply orientation to image according to exif
-        image_pil = utils.apply_exif_orientation(image_pil)
+        image_pil = utils.apply_exif_orientation(image_pil)        
 
         with io.BytesIO() as f:
             ext = osp.splitext(filename)[1].lower()
@@ -53,6 +55,16 @@ class LabelFile(object):
             image_pil.save(f, format=format)
             f.seek(0)
             return f.read()
+    
+    @staticmethod
+    def load_image_file_sk(filename):
+        try:
+            loadImage = skimage.io.imread(filename, False)
+        except IOError:
+            logger.error("Failed opening image file: {}".format(filename))
+            return
+        
+        return loadImage
 
     def load(self, filename):
         keys = [
@@ -95,7 +107,8 @@ class LabelFile(object):
             else:
                 # relative path from label file to relative path from cwd
                 imagePath = osp.join(osp.dirname(filename), data["imagePath"])
-                imageData = self.load_image_file(imagePath)
+                #imageData = self.load_image_file(imagePath)
+                imageData = self.load_image_file_sk(filename)
             flags = data.get("flags") or {}
             imagePath = data["imagePath"]
             self._check_image_height_and_width(

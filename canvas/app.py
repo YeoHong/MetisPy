@@ -9,6 +9,9 @@ import math
 import imgviz
 import re 
 
+from skimage import img_as_ubyte
+import numpy as np 
+
 
 from MetisPy.canvas.shape import Shape
 from MetisPy.canvas.widgets.brightness_contrast_dialog import BrightnessContrastDialog
@@ -19,6 +22,8 @@ from MetisPy.canvas.widgets.label_list_widget import LabelListWidgetItem
 from MetisPy.canvas.widgets.tool_bar import ToolBar
 from MetisPy.canvas.widgets.unique_label_qlist_widget import UniqueLabelQListWidget
 from MetisPy.canvas.widgets.zoom_widget import ZoomWidget
+
+from MetisPy.imageprocess.colorTogray import ColorToGray
 
 from MetisPy.utils.logger import logger
 from MetisPy.utils.label_file import LabelFile
@@ -607,6 +612,16 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         fill_drawing.trigger()
 
+        # Processing Menu
+        colorTogray = action(
+            "&Convert Color to Gray",
+            self.colorToGray,
+            None,
+            "color",
+            "Convert Color to Gray",
+            enabled=True,
+        )
+
         help = action(
             self.tr("&Tutorial"),
             self.tutorial,
@@ -699,12 +714,17 @@ class MainWindow(QtWidgets.QMainWindow):
                 brightnessContrast,
             ),
             onShapesPresent=(saveAs, hideAll, showAll),
+            colorTogray=colorTogray,
+            processMenu=(
+                colorTogray,
+            ),
         )
 
         self.menus = utils.struct(
             file=self.menu(self.tr("&File")),
             edit=self.menu(self.tr("&Edit")),
             view=self.menu(self.tr("&View")),
+            process=self.menu(self.tr("&Process")),
             help=self.menu(self.tr("&Help")),
             recentFiles=QtWidgets.QMenu(self.tr("Open &Recent")),
             labelList=labelMenu,
@@ -725,7 +745,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         utils.addActions(
             self.menus.view,
-            (
+            (                
                 self.flag_dock.toggleViewAction(),
                 self.label_dock.toggleViewAction(),
                 self.shape_dock.toggleViewAction(),
@@ -744,6 +764,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 fitWidth,
                 None,
                 brightnessContrast,             
+            ),
+        )
+
+        utils.addActions(
+            self.menus.process,
+            (
+                colorTogray,
             ),
         )
 
@@ -1167,11 +1194,23 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             self.otherData = self.labelFile.otherData
         else:
-            self.imageData = LabelFile.load_image_file(filename)
-            if self.imageData:
+            #self.imageData = LabelFile.load_image_file(filename)
+            self.imageData = LabelFile.load_image_file_sk(filename)
+            if self.imageData.all():
                 self.imagePath = filename
             self.labelFile = None
-        image = QtGui.QImage.fromData(self.imageData)
+
+        height, width, channel = self.imageData.shape
+        bytesPerLine = 3 * width
+        arr = img_as_ubyte(self.imageData)
+        #qImg = QtGui.QImage(arr.data, width, height, bytesPerLine, QtGui.QImage.Format_RGB888).rgbSwapped()
+        qImg = QtGui.QImage(arr.data, width, height, bytesPerLine, QtGui.QImage.Format_RGB888)
+        
+        
+        #arr = np.require(self.imageData, np.uint8, 'C')
+        #img = QtGui.QImage(arr.data, arr.shape[1], arr.shape[0], arr.strides[0], QtGui.QImage.Format_RGB888)
+        
+        image = QtGui.QImage.fromData(qImg)
 
         if image.isNull():
             formats = [
@@ -1841,6 +1880,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.labelList.clear()
         self.loadShapes(self.canvas.shapes)
         self.actions.undo.setEnabled(self.canvas.isShapeRestorable)
+
+    ## Menus - Process
+    def colorToGray(self, value):
+        print("color To Gray")
+        qimage = ColorToGray(self.imageData)
+        self.canvas.loadPixmap(
+            QtGui.QPixmap.fromImage(qimage), clear_shapes=False
+        )
 
 
     ## Menus - Help
